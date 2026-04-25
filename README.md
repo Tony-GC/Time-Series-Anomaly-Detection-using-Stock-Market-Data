@@ -5,41 +5,42 @@ Course: **COMP-592DL – Project in Data Science**
 
 ## Project Overview
 
-This project studies **anomaly detection in financial time series** using stock market data.  
-The goal is to identify unusual market behavior in stock prices and related market indicators, and to compare three different anomaly-detection approaches:
+This repository contains my semester project on **time-series anomaly detection using stock market data**.
 
-- a **baseline statistical detector**
+The project studies how different anomaly-detection methods behave on **financial time series**, using selected stocks together with benchmark market indices. The goal is to detect unusual market behavior, compare model outputs, and evaluate the trade-offs between simple, tree-based, and deep-learning approaches.
+
+The project compares three methods:
+
+- **Baseline statistical detector**
 - **Isolation Forest**
-- an **LSTM autoencoder**
-
-The project is built around publicly available historical market data and focuses on both **interpretability** and **method comparison**.
+- **LSTM Autoencoder**
 
 ---
 
 ## Research Objective
 
-The main objective is to investigate how different anomaly-detection methods behave on **financial time series**, and whether they capture similar or different types of unusual market behavior.
+The main objective of this project is to investigate anomaly detection in **financial time series** and compare whether different methods identify similar or different types of unusual behavior.
 
-In particular, the project aims to:
+More specifically, the project aims to:
 
-- engineer anomaly-relevant features from OHLCV market data
-- detect unusual behavior in selected stocks and benchmark indices
-- compare simple, tree-based, and deep-learning methods
-- analyze anomaly dates, anomaly clusters, and event peaks
-- connect the implementation with relevant academic literature
+- collect historical market data for selected stocks and indices
+- engineer anomaly-relevant features from OHLCV data
+- apply multiple anomaly-detection methods
+- analyze anomaly dates and event peaks
+- compare the methods in terms of sensitivity, interpretability, and behavior
+- connect the implementation to relevant academic literature
 
 ---
 
 ## Selected Instruments
 
 ### Indices
-- S&P 500
-- NASDAQ
-- VIX
+- **S&P 500**
+- **NASDAQ**
+- **VIX**
 
 ### Stocks
-The project uses a selected subset of stocks for analysis.  
-The exact stock list can be adjusted inside the scripts and notebooks.
+A selected subset of stocks is used in the project and can be adjusted inside the scripts and notebooks.
 
 ---
 
@@ -52,7 +53,42 @@ A simple and interpretable benchmark based on statistical anomaly logic and thre
 An unsupervised tree-based anomaly-detection model applied to engineered financial features.
 
 ### 3. LSTM Autoencoder
-A sequence-based deep-learning model that detects anomalies using reconstruction error on rolling time windows.
+A sequence-based deep-learning model that detects anomalies through reconstruction error on rolling time windows.
+
+---
+
+## Feature Engineering
+
+The project transforms raw **OHLCV** market data into anomaly-detection inputs.
+
+The main feature groups are:
+
+- **Return features**  
+  simple returns, absolute returns, and multi-horizon returns
+
+- **Trend features**  
+  moving averages and distances from moving averages
+
+- **Volatility features**  
+  rolling volatility over different windows
+
+- **Range / candle features**  
+  high-low range, gaps, candle-body behavior
+
+- **Volume features**  
+  volume changes, relative volume, and rolling volume anomalies
+
+- **Market context features**  
+  SP500, NASDAQ, and VIX series used as contextual benchmarks
+
+- **Relative features**  
+  stock behavior relative to market benchmarks such as SP500 and NASDAQ
+
+These features are used as inputs to the baseline detector, Isolation Forest, and LSTM autoencoder.
+
+For implementation details, see:
+- `src/features.py`
+- `src/Feature_Engineering.docx`
 
 ---
 
