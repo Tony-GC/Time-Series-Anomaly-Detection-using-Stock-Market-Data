@@ -12,7 +12,8 @@ It builds features in three layers:
 
 1. Per-series behavior
 Computed separately for each index or stock:
- - returns
+ - simple returns
+ - log returns
  - rolling volatility
  - moving averages
  - rolling z-scores
@@ -21,9 +22,9 @@ Computed separately for each index or stock:
 
 2. Market context
 It brings in, for every date:
- - S&P 500 level and return
- - NASDAQ level and return
- - VIX level and return
+ - S&P 500 level, simple return, log return, volatility, z-score
+ - NASDAQ level, simple return, log return, volatility, z-score
+ - VIX level, simple return, log return, volatility, z-score
 
 So every stock-day can be interpreted relative to what the market was doing.
 
@@ -31,8 +32,10 @@ So every stock-day can be interpreted relative to what the market was doing.
 For stocks only:
  - excess_return_sp500
  - excess_return_nasdaq
+ - excess_simple_return_sp500
+ - excess_simple_return_nasdaq
 
-These are very useful because a stock can be anomalous even if the whole
+These are useful because a stock can be anomalous even if the whole
 market is moving, and these features help isolate that.
 
 Important notes
@@ -46,33 +49,16 @@ The first few rows per ticker will have NaN values because:
  - returns need previous prices
  - 20-day and 60-day features need enough history
 
-Do not fill those yet. They are expected.
+Do not fill those here. They are expected.
 
 3. Newer stocks
 Some tickers may not have data for the entire period. That is also normal.
 The feature code will still work.
 
-Initial feature subset for modeling
-
-[
-    "log_return",
-    "abs_log_return",
-    "return_5d",
-    "return_20d",
-    "hl_range_pct",
-    "dist_ma_20",
-    "vol_5",
-    "vol_20",
-    "z_return_20",
-    "volume_z_20",
-    "SP500_log_return",
-    "NASDAQ_log_return",
-    "VIX_level",
-    "VIX_log_return",
-    "excess_return_sp500",
-]
-
-That is a strong first feature set for Isolation Forest later.
+Use case for LSTM
+-----------------
+This version keeps both simple and log return features so you can later decide
+which return convention to use in the LSTM feature set.
 """
 
 
@@ -142,7 +128,7 @@ def compute_single_series_features(group: pd.DataFrame) -> pd.DataFrame:
     group["vol_20"] = group["log_return"].rolling(20, min_periods=20).std(ddof=0)
     group["vol_60"] = group["log_return"].rolling(60, min_periods=60).std(ddof=0)
 
-    # Return anomaly score
+    # Return anomaly score (log-return based)
     group["z_return_20"] = rolling_zscore(group["log_return"], 20)
 
     # Volume features
@@ -163,7 +149,15 @@ def build_market_context(df: pd.DataFrame) -> pd.DataFrame:
     Extract daily market context from SP500, NASDAQ, and VIX
     and merge it back into the whole dataset.
     """
-    context_cols = ["Date", "SeriesName", "Price", "log_return", "vol_20", "z_return_20"]
+    context_cols = [
+        "Date",
+        "SeriesName",
+        "Price",
+        "simple_return",
+        "log_return",
+        "vol_20",
+        "z_return_20",
+    ]
 
     market_df = df[df["SeriesName"].isin(MARKET_SERIES)][context_cols].copy()
 
@@ -177,14 +171,19 @@ def build_market_context(df: pd.DataFrame) -> pd.DataFrame:
     # Rename for readability
     rename_map = {
         "SP500_Price": "SP500_level",
+        "SP500_simple_return": "SP500_simple_return",
         "SP500_log_return": "SP500_log_return",
         "SP500_vol_20": "SP500_vol_20",
         "SP500_z_return_20": "SP500_z_20",
+
         "NASDAQ_Price": "NASDAQ_level",
+        "NASDAQ_simple_return": "NASDAQ_simple_return",
         "NASDAQ_log_return": "NASDAQ_log_return",
         "NASDAQ_vol_20": "NASDAQ_vol_20",
         "NASDAQ_z_return_20": "NASDAQ_z_20",
+
         "VIX_Price": "VIX_level",
+        "VIX_simple_return": "VIX_simple_return",
         "VIX_log_return": "VIX_log_return",
         "VIX_vol_20": "VIX_vol_20",
         "VIX_z_return_20": "VIX_z_20",
@@ -198,12 +197,23 @@ def build_market_context(df: pd.DataFrame) -> pd.DataFrame:
 
     df["excess_return_sp500"] = np.nan
     df["excess_return_nasdaq"] = np.nan
+    df["excess_simple_return_sp500"] = np.nan
+    df["excess_simple_return_nasdaq"] = np.nan
 
+    # Log-return excess
     df.loc[stock_mask, "excess_return_sp500"] = (
         df.loc[stock_mask, "log_return"] - df.loc[stock_mask, "SP500_log_return"]
     )
     df.loc[stock_mask, "excess_return_nasdaq"] = (
         df.loc[stock_mask, "log_return"] - df.loc[stock_mask, "NASDAQ_log_return"]
+    )
+
+    # Simple-return excess
+    df.loc[stock_mask, "excess_simple_return_sp500"] = (
+        df.loc[stock_mask, "simple_return"] - df.loc[stock_mask, "SP500_simple_return"]
+    )
+    df.loc[stock_mask, "excess_simple_return_nasdaq"] = (
+        df.loc[stock_mask, "simple_return"] - df.loc[stock_mask, "NASDAQ_simple_return"]
     )
 
     return df
@@ -252,20 +262,29 @@ def reorder_columns(df: pd.DataFrame) -> pd.DataFrame:
         "log_volume",
         "volume_change",
         "volume_z_20",
+
         "SP500_level",
+        "SP500_simple_return",
         "SP500_log_return",
         "SP500_vol_20",
         "SP500_z_20",
+
         "NASDAQ_level",
+        "NASDAQ_simple_return",
         "NASDAQ_log_return",
         "NASDAQ_vol_20",
         "NASDAQ_z_20",
+
         "VIX_level",
+        "VIX_simple_return",
         "VIX_log_return",
         "VIX_vol_20",
         "VIX_z_20",
+
         "excess_return_sp500",
         "excess_return_nasdaq",
+        "excess_simple_return_sp500",
+        "excess_simple_return_nasdaq",
     ]
 
     ordered = [c for c in base_cols + feature_cols if c in df.columns]
@@ -277,8 +296,7 @@ def main() -> None:
     df = pd.read_csv(RAW_PATH, parse_dates=["Date"])
     df = df.sort_values(["Ticker", "Date"]).reset_index(drop=True)
 
-    # Compute features per ticker without using groupby.apply,
-    # which avoids the pandas deprecation warning and future behavior changes.
+    # Compute features per ticker
     featured_parts = []
 
     for ticker, group in df.groupby("Ticker", sort=False):
@@ -293,7 +311,7 @@ def main() -> None:
     # Final ordering
     featured = reorder_columns(featured)
 
-    # IMPORTANT - Keeping the period of interest 
+    # Keep the period of interest
     featured = featured[(featured["Date"] >= "2021-01-01")].copy()
 
     # Save
